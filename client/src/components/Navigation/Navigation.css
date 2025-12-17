@@ -1,0 +1,51 @@
+Header styles header {
+    background-color: #333;
+    /* Dark grey background */
+    padding: 10px;
+}
+
+/* Navigation styles */
+nav {
+    display: flex;
+    justify-content: center;
+    /* Center the content inside the nav */
+    align-items: center;
+    width: 600px;
+    /* Set a fixed width for the nav */
+    margin: 0 auto;
+    /* Center the nav horizontally within the header */
+}
+
+/* Navigation links styles */
+ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    /* Center the list items within the ul */
+}
+
+li {
+    margin-right: 20px;
+}
+
+/* Remove margin on the last list item */
+li:last-child {
+    margin-right: 0;
+}
+
+/* Link styles */
+a {
+    color: #fff;
+    /* White text color */
+    text-decoration: none;
+    /* Remove default underline */
+    transition: color 0.3s ease;
+    /* Smooth transition for color change */
+}
+
+a:hover {
+    color: #00bcd4;
+    /* Change color on hover */
+}
