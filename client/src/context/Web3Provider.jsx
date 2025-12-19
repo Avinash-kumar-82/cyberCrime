@@ -1,42 +1,69 @@
 import { useEffect, useState } from "react";
 import { Web3Context } from "./web3Context";
 import { getWeb3State } from "../utils/getWeb3State";
-import { handleAccountChange } from "../utils/handleAccountChange";
-import { handleChainChange } from "../utils/handleChainChange";
+import { toast } from "react-hot-toast";
 
 const Web3Provider = ({ children }) => {
     const [web3State, setWeb3State] = useState({
-        contractInstance: null,
+        smartAccount: null,
+        smartAccountAddress: null,
         selectedAccount: null,
         chainId: null,
+        provider: null,
         signer: null,
-        provider: null
-    })
+        contractInterface: null,
+        contractAddress: null,
+    });
+
+    // ✅ ONLY runs on button click
     const handleWallet = async () => {
         try {
-            const { contractInstance, selectedAccount, chainId, signer, provider } = await getWeb3State();
-            setWeb3State({ contractInstance, selectedAccount, chainId, signer, provider })
+            const state = await getWeb3State();
+            if (!state) return;
+            setWeb3State(state);
         } catch (error) {
-            console.error(error)
+            console.error(error);
+            toast.error("Failed to connect wallet");
         }
-    }
+    };
+
+    // ✅ SAFE listeners (NO ethers calls)
     useEffect(() => {
-        window.ethereum.on('accountsChanged', () => handleAccountChange(setWeb3State))
-        window.ethereum.on('chainChanged', () => handleChainChange(setWeb3State))
+        if (!window.ethereum) return;
+
+        const onAccountsChanged = () => {
+            // reset state only
+            setWeb3State({
+                smartAccount: null,
+                smartAccountAddress: null,
+                selectedAccount: null,
+                chainId: null,
+                provider: null,
+                signer: null,
+                contractInterface: null,
+                contractAddress: null,
+            });
+        };
+
+        const onChainChanged = () => {
+            // force reload is safest with ethers v6
+            window.location.reload();
+        };
+
+        window.ethereum.on("accountsChanged", onAccountsChanged);
+        window.ethereum.on("chainChanged", onChainChanged);
 
         return () => {
-            window.ethereum.removeListener('accountsChanged', () => handleAccountChange(setWeb3State))
-            window.ethereum.removeListener('chainChanged', () => handleChainChange(setWeb3State))
-        }
-    }, [])
+            window.ethereum.removeListener("accountsChanged", onAccountsChanged);
+            window.ethereum.removeListener("chainChanged", onChainChanged);
+        };
+    }, []);
 
     return (
-        <>
-            <Web3Context.Provider value={{ web3State, handleWallet }}>
-                {children}
-            </Web3Context.Provider>
+        <Web3Context.Provider value={{ web3State, handleWallet }}>
+            {children}
+        </Web3Context.Provider>
+    );
+};
 
-        </>
-    )
-}
 export default Web3Provider;
