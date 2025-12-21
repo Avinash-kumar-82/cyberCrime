@@ -1,50 +1,33 @@
 import { useEffect, useState } from "react";
-import { ethers } from "ethers";
-import { getWeb3State } from "../../utils/getWeb3State";
-import { Link, useNavigate } from "react-router-dom";
+import { useWeb3Context } from "../../context/userWeb3Context";
 import { toast } from "react-hot-toast";
+import { Link, useNavigate } from "react-router-dom";
 
 const NavbarGovt = () => {
-    const [account, setAccount] = useState(null);
+    const { web3State } = useWeb3Context();
+    const { selectedAccount, role } = web3State;
     const navigate = useNavigate();
 
+    // ✅ Redirect if user is not owner/government
     useEffect(() => {
-        const init = async () => {
-            const web3 = await getWeb3State();
-            if (!web3) return;
+        if (!selectedAccount || !role) return;
 
-            setAccount(web3.selectedAccount);
-
-            const contract = new ethers.Contract(
-                web3.contractAddress,
-                web3.contractInterface,
-                web3.signer
-            );
-
-            try {
-                if (web3.selectedAccount.toLowerCase() !== contract.government().toLowerCase()) {
-                    toast.error("Not authorized as government");
-                    navigate("/"); // redirect non-government users
-                }
-            } catch (err) {
-                console.error(err);
-                navigate("/");
-            }
-        };
-
-        init();
-    }, []);
+        if (role !== "owner") {
+            toast.error("Not authorized as government");
+            navigate("/"); // redirect non-owner
+        }
+    }, [selectedAccount, role]);
 
     return (
         <nav className="bg-gray-900 text-gray-200 p-4 flex justify-between items-center">
             <div className="font-bold text-xl">Government Dashboard</div>
             <div className="flex gap-4">
-                <Link to="/govt/dashboard" className="hover:text-blue-400">Dashboard</Link>
-                <Link to="/govt/policemanagement" className="hover:text-blue-400">Police Management</Link>
-                <Link to="/govt/assigncase" className="hover:text-blue-400">Assign Case</Link>
+                <Link to="/govt/manage-police" className="hover:text-blue-400">
+                    Manage Police
+                </Link>
             </div>
             <div>
-                {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : ""}
+                {selectedAccount ? selectedAccount.slice(0, 6) + "..." + selectedAccount.slice(-4) : ""}
             </div>
         </nav>
     );

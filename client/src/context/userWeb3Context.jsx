@@ -2,5 +2,9 @@ import { useContext } from "react";
 import { Web3Context } from "./web3Context";
 
 export const useWeb3Context = () => {
-    return useContext(Web3Context);
-}
+    const context = useContext(Web3Context);
+    if (!context) {
+        throw new Error("useWeb3Context must be used within a Web3Provider");
+    }
+    return context;
+};

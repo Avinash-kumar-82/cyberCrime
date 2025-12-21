@@ -8,7 +8,7 @@
         "anonymous": false,
         "inputs": [
             {
-                "indexed": false,
+                "indexed": true,
                 "internalType": "uint256",
                 "name": "firId",
                 "type": "uint256"
@@ -27,10 +27,35 @@
         "anonymous": false,
         "inputs": [
             {
-                "indexed": false,
+                "indexed": true,
                 "internalType": "uint256",
                 "name": "firId",
                 "type": "uint256"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "police",
+                "type": "address"
+            }
+        ],
+        "name": "FIRAssigned",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "firId",
+                "type": "uint256"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
             },
             {
                 "indexed": false,
@@ -41,6 +66,94 @@
         ],
         "name": "FIRRegistered",
         "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "police",
+                "type": "address"
+            }
+        ],
+        "name": "PoliceWalletAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "police",
+                "type": "address"
+            }
+        ],
+        "name": "PoliceWalletRemoved",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "firId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "string",
+                "name": "remark",
+                "type": "string"
+            }
+        ],
+        "name": "addPoliceRemark",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "police",
+                "type": "address"
+            }
+        ],
+        "name": "addPoliceWallet",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "firId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "police",
+                "type": "address"
+            }
+        ],
+        "name": "assignFIRToPolice",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "firId",
+                "type": "uint256"
+            }
+        ],
+        "name": "closeCase",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
     },
     {
         "inputs": [],
@@ -57,147 +170,39 @@
     },
     {
         "inputs": [],
-        "name": "government",
+        "name": "getAllFIRsForPolice",
         "outputs": [
             {
-                "internalType": "address",
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "firId",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "enum CyberCrimeSystem.FIRType",
+                        "name": "firType",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "enum CyberCrimeSystem.CaseStatus",
+                        "name": "status",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "bytes32",
+                        "name": "trackingId",
+                        "type": "bytes32"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "assignedPolice",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct CyberCrimeSystem.FIRSummary[]",
                 "name": "",
-                "type": "address"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "name": "policeLedger",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "id",
-                "type": "uint256"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "anonymousUserId",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "trackingId",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "enum CyberCrimeSystem.FIRType",
-                "name": "firType",
-                "type": "uint8"
-            },
-            {
-                "internalType": "uint256",
-                "name": "crimeDate",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "firDate",
-                "type": "uint256"
-            },
-            {
-                "internalType": "enum CyberCrimeSystem.CaseStatus",
-                "name": "status",
-                "type": "uint8"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "enum CyberCrimeSystem.FIRType",
-                "name": "firType",
-                "type": "uint8"
-            },
-            {
-                "internalType": "string[]",
-                "name": "accusedData",
-                "type": "string[]"
-            },
-            {
-                "internalType": "bytes32[]",
-                "name": "evidenceHash",
-                "type": "bytes32[]"
-            },
-            {
-                "internalType": "string[]",
-                "name": "description",
-                "type": "string[]"
-            },
-            {
-                "internalType": "uint256",
-                "name": "crimeDate",
-                "type": "uint256"
-            }
-        ],
-        "name": "registerFIR",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes32",
-                "name": "trackingId",
-                "type": "bytes32"
-            }
-        ],
-        "name": "trackCase",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "firId",
-                "type": "uint256"
-            },
-            {
-                "internalType": "enum CyberCrimeSystem.FIRType",
-                "name": "firType",
-                "type": "uint8"
-            },
-            {
-                "internalType": "enum CyberCrimeSystem.CaseStatus",
-                "name": "status",
-                "type": "uint8"
-            },
-            {
-                "internalType": "string[]",
-                "name": "policeRemarks",
-                "type": "string[]"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
-            }
-        ],
-        "name": "trackingToFIR",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
+                "type": "tuple[]"
             }
         ],
         "stateMutability": "view",
@@ -209,83 +214,9 @@
                 "internalType": "uint256",
                 "name": "firId",
                 "type": "uint256"
-            },
-            {
-                "internalType": "enum CyberCrimeSystem.CaseStatus",
-                "name": "newStatus",
-                "type": "uint8"
-            },
-            {
-                "internalType": "string[]",
-                "name": "remarks",
-                "type": "string[]"
             }
         ],
-        "name": "updateCaseStatus",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "name": "userFIRs",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "registryId",
-                "type": "uint256"
-            },
-            {
-                "internalType": "bool",
-                "name": "isFIRRegistered",
-                "type": "bool"
-            },
-            {
-                "internalType": "bool",
-                "name": "isCaseClosed",
-                "type": "bool"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "firId",
-                "type": "uint256"
-            },
-            {
-                "internalType": "bool",
-                "name": "isValid",
-                "type": "bool"
-            },
-            {
-                "internalType": "string",
-                "name": "remark",
-                "type": "string"
-            }
-        ],
-        "name": "validateCase",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "viewAllUserFIRs",
+        "name": "getFIRDetails",
         "outputs": [
             {
                 "components": [
@@ -295,9 +226,9 @@
                         "type": "uint256"
                     },
                     {
-                        "internalType": "bytes32",
-                        "name": "anonymousUserId",
-                        "type": "bytes32"
+                        "internalType": "address",
+                        "name": "user",
+                        "type": "address"
                     },
                     {
                         "internalType": "bytes32",
@@ -343,11 +274,69 @@
                         "internalType": "string[]",
                         "name": "policeRemarks",
                         "type": "string[]"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "assignedPolice",
+                        "type": "address"
                     }
                 ],
-                "internalType": "struct CyberCrimeSystem.FIR[]",
+                "internalType": "struct CyberCrimeSystem.FIR",
+                "name": "",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getMyFIRs",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "firId",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "enum CyberCrimeSystem.FIRType",
+                        "name": "firType",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "enum CyberCrimeSystem.CaseStatus",
+                        "name": "status",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "bytes32",
+                        "name": "trackingId",
+                        "type": "bytes32"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "assignedPolice",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct CyberCrimeSystem.FIRSummary[]",
                 "name": "",
                 "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "government",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
             }
         ],
         "stateMutability": "view",
@@ -357,36 +346,121 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "userAccount",
+                "name": "user",
                 "type": "address"
             }
         ],
-        "name": "viewAllUserFIRs",
+        "name": "isGovernment",
         "outputs": [
             {
-                "components": [
-                    {
-                        "internalType": "uint256",
-                        "name": "registryId",
-                        "type": "uint256"
-                    },
-                    {
-                        "internalType": "bool",
-                        "name": "isFIRRegistered",
-                        "type": "bool"
-                    },
-                    {
-                        "internalType": "bool",
-                        "name": "isCaseClosed",
-                        "type": "bool"
-                    }
-                ],
-                "internalType": "struct CyberCrimeSystem.UserRegister[]",
+                "internalType": "bool",
                 "name": "",
-                "type": "tuple[]"
+                "type": "bool"
             }
         ],
         "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+            }
+        ],
+        "name": "isPolice",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "enum CyberCrimeSystem.FIRType",
+                "name": "firType",
+                "type": "uint8"
+            },
+            {
+                "internalType": "string[]",
+                "name": "accusedData",
+                "type": "string[]"
+            },
+            {
+                "internalType": "bytes32[]",
+                "name": "evidenceHash",
+                "type": "bytes32[]"
+            },
+            {
+                "internalType": "string[]",
+                "name": "description",
+                "type": "string[]"
+            },
+            {
+                "internalType": "uint256",
+                "name": "crimeDate",
+                "type": "uint256"
+            }
+        ],
+        "name": "registerFIR",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "police",
+                "type": "address"
+            }
+        ],
+        "name": "removePoliceWallet",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "name": "trackingToFIR",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "firId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bool",
+                "name": "approve",
+                "type": "bool"
+            }
+        ],
+        "name": "verifyOrRejectFIR",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     }
 ]

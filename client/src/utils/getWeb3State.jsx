@@ -1,91 +1,86 @@
 import { ethers } from "ethers";
 import abi from "../constant/abi.json";
-import { createSmartAccountClient } from "@biconomy/account";
 import axios from "axios";
 import { toast } from "react-hot-toast";
+import { GelatoRelay } from "@gelatonetwork/relay-sdk";
+
+const relay = new GelatoRelay();
 
 export const getWeb3State = async () => {
     try {
-        if (!window.ethereum || !window.ethereum.isMetaMask) {
-            toast.error("MetaMask is not installed");
+        // ------------------ MetaMask check ------------------
+        if (!window.ethereum) {
+            toast.error("MetaMask not installed");
             return null;
         }
 
-        // Try silent account fetch
-        let accounts = await window.ethereum.request({ method: "eth_accounts" });
-        if (!accounts || accounts.length === 0) {
-            accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        }
-
-        if (!accounts || accounts.length === 0) {
-            toast.error("No account selected");
-            return null;
-        }
-
-        const selectedAccount = accounts[0];
-
-        // Chain ID
-        const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
-        const chainId = parseInt(chainIdHex, 16);
-
-        // Provider & signer
+        // ------------------ Connect wallet ------------------
         const provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
         const signer = await provider.getSigner();
+        const selectedAccount = await signer.getAddress();
 
-        // Contract
+        // ------------------ Chain ID ------------------
+        const network = await provider.getNetwork();
+        const chainId = Number(network.chainId);
+
+        // ------------------ Contract ------------------
         const contractAddress = import.meta.env.VITE_CONTRACTADDRESS;
-        const contractInterface = new ethers.Interface(abi);
+        const contract = new ethers.Contract(contractAddress, abi, signer);
 
-        // Biconomy setup
-        const apiKey = import.meta.env.VITE_BICONOMY_API_KEY;
-        const envChainId = import.meta.env.VITE_CHAIN_ID;
-
-        const bundlerUrl = `https://bundler.biconomy.io/api/v2/${envChainId}/${apiKey}`;
-        const paymasterUrl = `https://paymaster.biconomy.io/api/v1/${envChainId}/${apiKey}`;
-
-        const smartAccount = await createSmartAccountClient({
-            signer,
-            bundlerUrl,
-            paymasterUrl,
-        });
-
-        const smartAccountAddress = await smartAccount.getAccountAddress();
-
-        // Attempt backend authentication
-        let token = null;
+        // ------------------ Role detection ------------------
+        let role = "user";
         try {
-            const message = "Register cyberCrime Reports. You accept our terms and conditions";
-            const signature = await signer.signMessage(message);
+            const isPolice = await contract.isPolice(selectedAccount);
+            const isGovt = await contract.isGovernment(selectedAccount);
+            if (isGovt) role = "owner";
+            else if (isPolice) role = "police";
+        } catch {
+            console.warn("Role check skipped");
+        }
 
-            const res = await axios.post(
-                `http://localhost:3000/api/authentication?accountAddress=${selectedAccount}`,
-                { signature }
-            );
+        // ------------------ One-time authentication ------------------
+        let token = localStorage.getItem("token");
 
-            token = res.data.token;
-            localStorage.setItem("token", token);
-        } catch (signError) {
-            if (signError.code === 4001) {
-                toast.error("MetaMask signature rejected. Authentication skipped.");
-            } else {
-                console.error(signError);
-                toast.error("Authentication failed. Check console.");
+        if (!token) {
+            try {
+                const message = `Authenticate wallet ${selectedAccount} for CyberCrime DApp`;
+                const signature = await signer.signMessage(message);
+
+                const res = await axios.post(
+                    `http://localhost:3000/api/authentication?accountAddress=${selectedAccount}`,
+                    { signature }
+                );
+
+                token = res.data.token;
+                localStorage.setItem("token", token);
+            } catch (err) {
+                if (err.code === 4001) {
+                    toast.error("Signature rejected");
+                } else {
+                    console.error(err);
+                    toast.error("Authentication failed");
+                }
             }
         }
 
+        // ------------------ Return Web3 State ------------------
         return {
             provider,
             signer,
+            contract,
+            contractAddress,
             selectedAccount,
             chainId,
-            smartAccount,
-            smartAccountAddress,
-            contractAddress,
-            contractInterface,
-            token, // might be null if signing rejected
+            role,
+            token,
+            isAuthenticated: !!token,
+
+            // Gelato Relay (gasless)
+            relay,
         };
-    } catch (error) {
-        console.error(error);
+    } catch (err) {
+        console.error(err);
         toast.error("Wallet connection failed");
         return null;
     }

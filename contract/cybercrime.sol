@@ -2,28 +2,57 @@
 pragma solidity ^0.8.20;
 
 contract CyberCrimeSystem {
-    /* =========================
-        GOVERNMENT / POLICE
-    ========================== */
+    /*//////////////////////////////////////////////////////////////
+                               RELAYER
+    //////////////////////////////////////////////////////////////*/
+
+    address public trustedRelayer;
     address public government;
 
-    modifier onlyGovernment() {
-        require(msg.sender == government, "Not authorized");
+    modifier onlyRelayer() {
+        require(msg.sender == trustedRelayer, "Only relayer");
         _;
     }
 
-    modifier onlyPolice() {
-        require(policeWallets[msg.sender], "Not authorized as police");
+    modifier onlyGovernment(address user) {
+        require(user == government, "Not government");
         _;
     }
 
-    constructor() {
+    modifier onlyPolice(address user) {
+        require(policeWallets[user], "Not police");
+        _;
+    }
+
+    modifier onlyPoliceOrGovernment(address user) {
+        require(user == government || policeWallets[user], "Not authorized");
+        _;
+    }
+
+    constructor(address _relayer) {
+        trustedRelayer = _relayer;
         government = msg.sender;
     }
 
-    /* =========================
-        ENUMS
-    ========================== */
+    /*//////////////////////////////////////////////////////////////
+                               ROLES
+    //////////////////////////////////////////////////////////////*/
+
+    mapping(address => bool) private policeWallets;
+    address[] private policeList;
+
+    function isPolice(address user) external view returns (bool) {
+        return policeWallets[user];
+    }
+
+    function isGovernment(address user) external view returns (bool) {
+        return user == government;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          ENUMS & STRUCTS
+    //////////////////////////////////////////////////////////////*/
+
     enum FIRType {
         NOT_SPECIFIED,
         FRAUD_CALL,
@@ -40,9 +69,6 @@ contract CyberCrimeSystem {
         CASE_CLOSED
     }
 
-    /* =========================
-        STRUCTS
-    ========================== */
     struct FIR {
         uint256 id;
         address user;
@@ -55,6 +81,7 @@ contract CyberCrimeSystem {
         uint256 firDate;
         CaseStatus status;
         string[] policeRemarks;
+        address assignedPolice;
     }
 
     struct FIRSummary {
@@ -62,201 +89,164 @@ contract CyberCrimeSystem {
         FIRType firType;
         CaseStatus status;
         bytes32 trackingId;
+        address assignedPolice;
     }
 
-    /* =========================
-        STORAGE
-    ========================== */
-    uint256 public firCounter;
+    /*//////////////////////////////////////////////////////////////
+                               STORAGE
+    //////////////////////////////////////////////////////////////*/
 
+    uint256 public firCounter;
     mapping(uint256 => FIR) private firs;
     mapping(bytes32 => uint256) public trackingToFIR;
-
-    // User wallet → FIR summaries
-    mapping(address => FIRSummary[]) private userFIRs;
-
-    // Police dashboard FIR summaries
+    mapping(address => FIRSummary[]) public userFIRs;
     FIRSummary[] private policeFIRs;
 
-    // Police wallets
-    mapping(address => bool) public policeWallets;
-    address[] private policeList;
+    /*//////////////////////////////////////////////////////////////
+                               EVENTS
+    //////////////////////////////////////////////////////////////*/
 
-    /* =========================
-        EVENTS
-    ========================== */
-    event FIRRegistered(
-        uint256 indexed firId,
-        address indexed user,
-        bytes32 trackingId
-    );
-    event CaseStatusUpdated(uint256 indexed firId, CaseStatus status);
-    event PoliceAdded(address indexed policeAddress);
-    event PoliceRemoved(address indexed policeAddress);
+    event FIRRegistered(uint256 firId, address user, bytes32 trackingId);
+    event CaseStatusUpdated(uint256 firId, CaseStatus status);
+    event PoliceWalletAdded(address police);
+    event PoliceWalletRemoved(address police);
+    event FIRAssigned(uint256 firId, address police);
 
-    /* =========================
-        REGISTER FIR (USER)
-    ========================== */
+    /*//////////////////////////////////////////////////////////////
+                     GOVERNMENT → POLICE MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
+
+    function addPoliceWallet(
+        address govt,
+        address police
+    ) external onlyRelayer onlyGovernment(govt) {
+        require(!policeWallets[police], "Already police");
+        policeWallets[police] = true;
+        policeList.push(police);
+        emit PoliceWalletAdded(police);
+    }
+
+    function removePoliceWallet(
+        address govt,
+        address police
+    ) external onlyRelayer onlyGovernment(govt) {
+        policeWallets[police] = false;
+        for (uint i = 0; i < policeList.length; i++) {
+            if (policeList[i] == police) {
+                policeList[i] = policeList[policeList.length - 1];
+                policeList.pop();
+                break;
+            }
+        }
+        emit PoliceWalletRemoved(police);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          REGISTER FIR (USER)
+    //////////////////////////////////////////////////////////////*/
+
     function registerFIR(
+        address user,
         FIRType firType,
         string[] calldata accusedData,
         bytes32[] calldata evidenceHash,
         string[] calldata description,
         uint256 crimeDate
-    ) external {
-        require(msg.sender != government, "Police cannot file FIR");
+    ) external onlyRelayer {
+        require(!policeWallets[user], "Police cannot file FIR");
+
         if (firType == FIRType.FINANCIAL_THEFT) {
-            require(
-                block.timestamp - crimeDate <= 72 hours,
-                "Financial fraud must be reported within 72 hours"
-            );
+            require(block.timestamp - crimeDate <= 72 hours, "Late report");
         }
 
         firCounter++;
-
         bytes32 trackingId = keccak256(
-            abi.encodePacked(firCounter, msg.sender, block.timestamp)
+            abi.encodePacked(firCounter, user, block.timestamp)
         );
 
         FIR storage f = firs[firCounter];
         f.id = firCounter;
-        f.user = msg.sender;
+        f.user = user;
         f.trackingId = trackingId;
         f.firType = firType;
         f.crimeDate = crimeDate;
         f.firDate = block.timestamp;
         f.status = CaseStatus.FIR_SUBMITTED;
 
-        for (uint i = 0; i < accusedData.length; i++) {
+        for (uint i; i < accusedData.length; i++)
             f.accusedData.push(accusedData[i]);
-        }
-
-        for (uint i = 0; i < evidenceHash.length; i++) {
+        for (uint i; i < evidenceHash.length; i++)
             f.evidenceHash.push(evidenceHash[i]);
-        }
-
-        for (uint i = 0; i < description.length; i++) {
+        for (uint i; i < description.length; i++)
             f.description.push(description[i]);
-        }
 
-        trackingToFIR[trackingId] = firCounter;
+        FIRSummary memory summary = FIRSummary(
+            firCounter,
+            firType,
+            CaseStatus.FIR_SUBMITTED,
+            trackingId,
+            address(0)
+        );
 
-        FIRSummary memory summary = FIRSummary({
-            firId: firCounter,
-            firType: firType,
-            status: CaseStatus.FIR_SUBMITTED,
-            trackingId: trackingId
-        });
-
-        userFIRs[msg.sender].push(summary);
+        userFIRs[user].push(summary);
         policeFIRs.push(summary);
 
-        emit FIRRegistered(firCounter, msg.sender, trackingId);
+        emit FIRRegistered(firCounter, user, trackingId);
     }
 
-    /* =========================
-        USER DASHBOARD
-    ========================== */
-    function getMyFIRs() external view returns (FIRSummary[] memory) {
-        return userFIRs[msg.sender];
-    }
+    /*//////////////////////////////////////////////////////////////
+                         GOVERNMENT → ASSIGN FIR
+    //////////////////////////////////////////////////////////////*/
 
-    function getFIRDetails(uint256 firId) external view returns (FIR memory) {
-        FIR memory f = firs[firId];
-        require(f.id != 0, "FIR not found");
-        require(
-            msg.sender == f.user ||
-                msg.sender == government ||
-                policeWallets[msg.sender],
-            "Unauthorized"
-        );
-        return f;
-    }
-
-    /* =========================
-        PUBLIC TRACKING
-    ========================== */
-    function trackCase(
-        bytes32 trackingId
-    )
-        external
-        view
-        returns (
-            uint256 firId,
-            FIRType firType,
-            CaseStatus status,
-            string[] memory policeRemarks
-        )
-    {
-        uint256 id = trackingToFIR[trackingId];
-        require(id != 0, "Invalid Tracking ID");
-
-        FIR storage f = firs[id];
-        return (f.id, f.firType, f.status, f.policeRemarks);
-    }
-
-    /* =========================
-        POLICE DASHBOARD
-    ========================== */
-    function getAllFIRsForPolice()
-        external
-        view
-        onlyPolice
-        returns (FIRSummary[] memory)
-    {
-        return policeFIRs;
-    }
-
-    function updateCaseStatus(
+    function assignFIRToPolice(
+        address govt,
         uint256 firId,
-        CaseStatus newStatus,
-        string calldata remark
-    ) external onlyPolice {
+        address police
+    ) external onlyRelayer onlyGovernment(govt) {
         FIR storage f = firs[firId];
-        require(f.id != 0, "FIR not found");
+        f.assignedPolice = police;
+        f.status = CaseStatus.CASE_UNDERPROCESS;
 
-        f.status = newStatus;
-        f.policeRemarks.push(remark);
-
-        // 🔄 Update police summary
-        for (uint i = 0; i < policeFIRs.length; i++) {
-            if (policeFIRs[i].firId == firId) {
-                policeFIRs[i].status = newStatus;
-                break;
-            }
-        }
-
-        emit CaseStatusUpdated(firId, newStatus);
+        emit FIRAssigned(firId, police);
+        emit CaseStatusUpdated(firId, CaseStatus.CASE_UNDERPROCESS);
     }
 
-    /* =========================
-        GOVERNMENT: MANAGE POLICE
-    ========================== */
-    function addPolice(address _police) external onlyGovernment {
-        require(_police != address(0), "Invalid address");
-        require(!policeWallets[_police], "Already a police");
+    /*//////////////////////////////////////////////////////////////
+                           POLICE ACTIONS
+    //////////////////////////////////////////////////////////////*/
 
-        policeWallets[_police] = true;
-        policeList.push(_police);
-
-        emit PoliceAdded(_police);
+    function verifyOrRejectFIR(
+        address police,
+        uint256 firId,
+        bool approve
+    ) external onlyRelayer onlyPolice(police) {
+        FIR storage f = firs[firId];
+        f.status = approve ? CaseStatus.FIR_VERIFIED : CaseStatus.FIR_REJECTED;
+        emit CaseStatusUpdated(firId, f.status);
     }
 
-    function removePolice(address _police) external onlyGovernment {
-        require(policeWallets[_police], "Not a police");
+    function closeCase(
+        address police,
+        uint256 firId
+    ) external onlyRelayer onlyPolice(police) {
+        firs[firId].status = CaseStatus.CASE_CLOSED;
+        emit CaseStatusUpdated(firId, CaseStatus.CASE_CLOSED);
+    }
 
-        policeWallets[_police] = false;
+    /*//////////////////////////////////////////////////////////////
+                             READ FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
-        // Remove from list
-        for (uint i = 0; i < policeList.length; i++) {
-            if (policeList[i] == _police) {
-                policeList[i] = policeList[policeList.length - 1];
-                policeList.pop();
-                break;
-            }
-        }
+    function getMyFIRs(
+        address user
+    ) external view returns (FIRSummary[] memory) {
+        return userFIRs[user];
+    }
 
-        emit PoliceRemoved(_police);
+    function getAllFIRsForPolice(
+        address user
+    ) external view onlyPoliceOrGovernment(user) returns (FIRSummary[] memory) {
+        return policeFIRs;
     }
 
     function getAllPolice() external view returns (address[] memory) {

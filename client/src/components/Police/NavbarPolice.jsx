@@ -1,51 +1,59 @@
-import { useEffect, useState } from "react";
-import { ethers } from "ethers";
-import { getWeb3State } from "../../utils/getWeb3State";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useWeb3Context } from "../../context/userWeb3Context";
 import { toast } from "react-hot-toast";
+import { Link, useNavigate } from "react-router-dom";
 
 const NavbarPolice = () => {
-    const [account, setAccount] = useState(null);
+    const { web3State } = useWeb3Context();
+    const { selectedAccount, role } = web3State;
     const navigate = useNavigate();
 
+    // ✅ Allow only police & owner
     useEffect(() => {
-        const init = async () => {
-            const web3 = await getWeb3State();
-            if (!web3) return;
+        if (!selectedAccount || !role) return;
 
-            setAccount(web3.selectedAccount);
-            const contract = new ethers.Contract(
-                web3.contractAddress,
-                web3.contractInterface,
-                web3.signer
-            );
-
-            try {
-                const isPolice = await contract.policeWallets(web3.selectedAccount);
-                if (!isPolice) {
-                    toast.error("Not authorized as police");
-                    navigate("/"); // redirect non-police
-                }
-            } catch (err) {
-                console.error(err);
-                navigate("/");
-            }
-        };
-        init();
-    }, []);
+        if (role !== "police" && role !== "owner") {
+            toast.error("Not authorized");
+            navigate("/");
+        }
+    }, [selectedAccount, role, navigate]);
 
     return (
         <nav className="bg-gray-900 text-gray-200 p-4 flex justify-between items-center">
-            <div className="font-bold text-xl">Police Dashboard</div>
-            <div className="flex gap-4">
+            {/* Title */}
+            <div className="font-bold text-xl">
+                {role === "owner" ? "Government Dashboard" : "Police Dashboard"}
+            </div>
+
+            {/* Links */}
+            <div className="flex gap-6">
                 <Link to="/police/dashboard" className="hover:text-blue-400">
                     Dashboard
                 </Link>
+
                 <Link to="/police/firlist" className="hover:text-blue-400">
                     FIR List
                 </Link>
+
+                {/* 🔐 ONLY GOVT CAN SEE */}
+                {role === "owner" && (
+                    <Link
+                        to="/govt/manage-police"
+                        className="hover:text-red-400 font-semibold"
+                    >
+                        Manage Police
+                    </Link>
+                )}
             </div>
-            <div>{account ? account.slice(0, 6) + "..." + account.slice(-4) : ""}</div>
+
+            {/* Wallet */}
+            <div className="text-sm">
+                {selectedAccount
+                    ? selectedAccount.slice(0, 6) +
+                    "..." +
+                    selectedAccount.slice(-4)
+                    : ""}
+            </div>
         </nav>
     );
 };

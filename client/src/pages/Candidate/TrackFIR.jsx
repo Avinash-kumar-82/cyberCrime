@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
-import { ethers } from "ethers";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "react-hot-toast";
-import { getWeb3State } from "../../utils/getWeb3State";
+import { useWeb3Context } from "../../context/userWeb3Context";
 
 const TrackFIR = () => {
+    const { web3State } = useWeb3Context();
+    const { contract, isAuthenticated, selectedAccount } = web3State;
+
     const [trackingId, setTrackingId] = useState("");
     const [trackingResult, setTrackingResult] = useState(null);
     const [userFIRs, setUserFIRs] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [expandedFIRs, setExpandedFIRs] = useState({}); // For expand/collapse
 
     const statusMap = {
         0: "FIR_SUBMITTED",
@@ -17,45 +20,43 @@ const TrackFIR = () => {
         4: "CASE_CLOSED",
     };
 
+    /* ---------------- Fetch user's FIRs ---------------- */
+    const fetchUserFIRs = useCallback(async () => {
+        if (!contract || !selectedAccount) return;
+
+        try {
+            const allFIRs = await contract.userFIRs(selectedAccount);
+            // Map results to readable format
+            const formattedFIRs = allFIRs.reverse().map((f) => ({
+                firId: f.firId.toNumber(),
+                firType: f.firType,
+                status: f.status,
+                policeRemarks: f.policeRemarks,
+                accused: f.accused,       // Assuming smart contract returns array
+                evidence: f.evidence,     // Array of IPFS hashes
+                description: f.description, // Array of strings
+                crimeTimestamp: f.crimeTimestamp.toNumber(),
+            }));
+            setUserFIRs(formattedFIRs);
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to fetch your FIRs");
+        }
+    }, [contract, selectedAccount]);
+
     useEffect(() => {
-        const fetchUserFIRs = async () => {
-            const web3 = await getWeb3State();
-            if (!web3) return;
+        if (isAuthenticated) fetchUserFIRs();
+    }, [isAuthenticated, fetchUserFIRs]);
 
-            const contract = new ethers.Contract(
-                web3.contractAddress,
-                web3.contractInterface,
-                web3.signer
-            );
-
-            try {
-                const firs = await contract.getMyFIRs();
-                // Add expanded property for UI
-                setUserFIRs(firs.map((f) => ({ ...f, expanded: false })));
-            } catch (err) {
-                console.error(err);
-                toast.error("Failed to fetch your FIRs");
-            }
-        };
-
-        fetchUserFIRs();
-    }, []);
-
+    /* ---------------- Track by ID ---------------- */
     const trackCaseById = async () => {
-        if (!trackingId) return toast.error("Enter a valid tracking ID");
-
-        setLoading(true);
-        const web3 = await getWeb3State();
-        if (!web3) {
-            setLoading(false);
-            return;
+        if (!trackingId) {
+            return toast.error("Enter a valid tracking ID");
         }
 
-        const contract = new ethers.Contract(
-            web3.contractAddress,
-            web3.contractInterface,
-            web3.signer
-        );
+        if (!contract) return toast.error("Contract not ready");
+
+        setLoading(true);
 
         try {
             const result = await contract.trackCase(trackingId);
@@ -64,11 +65,15 @@ const TrackFIR = () => {
                 firType: result[1],
                 status: result[2],
                 policeRemarks: result[3],
+                accused: result[4],
+                evidence: result[5],
+                description: result[6],
+                crimeTimestamp: result[7].toNumber(),
             });
             toast.success("Tracking info fetched ✅");
         } catch (err) {
             console.error(err);
-            toast.error("Invalid tracking ID");
+            toast.error("Invalid tracking ID or access denied");
             setTrackingResult(null);
         } finally {
             setLoading(false);
@@ -76,18 +81,16 @@ const TrackFIR = () => {
     };
 
     const toggleExpand = (firId) => {
-        setUserFIRs((prev) =>
-            prev.map((f) => (f.firId === firId ? { ...f, expanded: !f.expanded } : f))
-        );
+        setExpandedFIRs((prev) => ({ ...prev, [firId]: !prev[firId] }));
     };
 
     return (
         <div className="max-w-4xl mx-auto mt-10 p-6 bg-gray-900 text-gray-200 rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold mb-6 text-center">Track Your FIRs 🔍</h2>
+            <h2 className="text-2xl font-bold mb-6 text-center">Track FIR 🔍</h2>
 
             {/* Track by ID */}
             <div className="mb-6 p-4 border border-gray-700 rounded bg-gray-800">
-                <h3 className="font-semibold mb-2">Track Case by ID:</h3>
+                <h3 className="font-semibold mb-2">Track Case by ID</h3>
                 <div className="flex gap-2">
                     <input
                         type="text"
@@ -98,9 +101,8 @@ const TrackFIR = () => {
                     />
                     <button
                         onClick={trackCaseById}
-                        className={`px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 ${loading ? "opacity-70 cursor-not-allowed" : ""
-                            }`}
-                        disabled={loading}
+                        disabled={loading || !isAuthenticated}
+                        className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-60"
                     >
                         {loading ? "Fetching..." : "Track"}
                     </button>
@@ -108,43 +110,48 @@ const TrackFIR = () => {
 
                 {trackingResult && (
                     <div className="mt-4 p-3 bg-gray-700 rounded">
-                        <p><strong>FIR ID:</strong> {trackingResult.firId}</p>
-                        <p><strong>Type:</strong> {trackingResult.firType}</p>
-                        <p><strong>Status:</strong> {statusMap[trackingResult.status]}</p>
-                        <p><strong>Police Remarks:</strong> {trackingResult.policeRemarks.join("; ")}</p>
+                        <p><b>FIR ID:</b> {trackingResult.firId}</p>
+                        <p><b>Type:</b> {trackingResult.firType}</p>
+                        <p><b>Status:</b> {statusMap[trackingResult.status]}</p>
+                        <p><b>Remarks:</b> {trackingResult.policeRemarks.join("; ")}</p>
                     </div>
                 )}
             </div>
 
-            {/* User FIR List */}
-            <h3 className="text-xl font-semibold mb-4">Your FIR List:</h3>
-            <div className="space-y-2">
-                {userFIRs.map((fir) => (
-                    <div key={fir.firId} className="border border-gray-700 rounded bg-gray-800">
-                        <div
-                            className="p-3 cursor-pointer flex justify-between items-center hover:bg-gray-700"
-                            onClick={() => toggleExpand(fir.firId)}
-                        >
-                            <div>
-                                <p><strong>ID:</strong> {fir.firId}</p>
-                                <p><strong>Type:</strong> {fir.firType}</p>
-                                <p><strong>Status:</strong> {statusMap[fir.status]}</p>
-                                <p><strong>Assigned Police:</strong> {fir.assignedPolice && fir.assignedPolice !== ethers.constants.AddressZero ? fir.assignedPolice : "Not assigned"}</p>
-                            </div>
-                            <div>{fir.expanded ? "▲" : "▼"}</div>
-                        </div>
+            {/* List of User's FIRs */}
+            <div className="p-4 border border-gray-700 rounded bg-gray-800">
+                <h3 className="font-semibold mb-2">Your FIRs</h3>
+                {userFIRs.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No FIRs submitted yet.</p>
+                ) : (
+                    <div className="space-y-2">
+                        {userFIRs.map((f) => (
+                            <div
+                                key={f.firId}
+                                className="p-3 border border-gray-700 rounded bg-gray-900 cursor-pointer hover:bg-gray-700"
+                            >
+                                <div className="flex justify-between items-center" onClick={() => toggleExpand(f.firId)}>
+                                    <div>
+                                        <p><b>ID:</b> {f.firId}</p>
+                                        <p><b>Type:</b> {f.firType}</p>
+                                        <p><b>Status:</b> {statusMap[f.status]}</p>
+                                    </div>
+                                    <div>{expandedFIRs[f.firId] ? "▲" : "▼"}</div>
+                                </div>
 
-                        {fir.expanded && (
-                            <div className="p-3 border-t border-gray-700 bg-gray-900">
-                                <p><strong>Accused:</strong> {fir.accusedData.join(", ")}</p>
-                                <p><strong>Description:</strong> {fir.description.join("; ")}</p>
-                                <p><strong>Evidence:</strong> {fir.evidenceHash.join(", ")}</p>
-                                <p><strong>Crime Date:</strong> {new Date(fir.crimeDate * 1000).toLocaleDateString()}</p>
-                                <p><strong>FIR Date:</strong> {new Date(fir.firDate * 1000).toLocaleDateString()}</p>
+                                {expandedFIRs[f.firId] && (
+                                    <div className="mt-2 text-sm bg-gray-800 p-2 rounded">
+                                        <p><b>Crime Date:</b> {new Date(f.crimeTimestamp * 1000).toLocaleDateString()}</p>
+                                        <p><b>Accused:</b> {f.accused.join(" | ")}</p>
+                                        <p><b>Description:</b> {f.description.join("; ")}</p>
+                                        <p><b>Evidence:</b> {f.evidence.join(", ")}</p>
+                                        <p><b>Police Remarks:</b> {f.policeRemarks.join("; ")}</p>
+                                    </div>
+                                )}
                             </div>
-                        )}
+                        ))}
                     </div>
-                ))}
+                )}
             </div>
         </div>
     );
